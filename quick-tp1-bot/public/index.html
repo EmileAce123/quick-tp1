@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quick TP1 - Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f1117;
+      color: #e1e4e8;
+      min-height: 100vh;
+    }
+    .login { display: flex; justify-content: center; align-items: center; height: 100vh; }
+    .login-box { background: #1c1f2e; padding: 2rem; border-radius: 12px; text-align: center; }
+    .login-box h2 { margin-bottom: 1rem; color: #58a6ff; }
+    .login-box input { padding: 0.6rem 1rem; border: 1px solid #30363d; border-radius: 6px; background: #0d1117; color: #e1e4e8; font-size: 1rem; width: 200px; }
+    .login-box button { margin-top: 0.8rem; padding: 0.6rem 1.5rem; background: #238636; border: none; border-radius: 6px; color: #fff; cursor: pointer; font-size: 1rem; }
+    .login-box button:hover { background: #2ea043; }
+
+    .dashboard { display: none; padding: 1rem 2rem; max-width: 1400px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; border-bottom: 1px solid #21262d; margin-bottom: 1.5rem; }
+    header h1 { font-size: 1.4rem; color: #58a6ff; }
+    .mode-badge { padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.8rem; font-weight: 700; }
+    .mode-testnet { background: #f0883e33; color: #f0883e; }
+    .mode-live { background: #da363333; color: #f85149; }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .stat-card { background: #1c1f2e; border-radius: 10px; padding: 1rem 1.2rem; }
+    .stat-card .label { font-size: 0.75rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card .value { font-size: 1.5rem; font-weight: 700; margin-top: 0.3rem; }
+    .positive { color: #3fb950; }
+    .negative { color: #f85149; }
+    .neutral { color: #e1e4e8; }
+
+    .section { margin-bottom: 2rem; }
+    .section-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.8rem; color: #c9d1d9; }
+
+    table { width: 100%; border-collapse: collapse; background: #1c1f2e; border-radius: 10px; overflow: hidden; }
+    th { background: #161b22; text-align: left; padding: 0.7rem 1rem; font-size: 0.75rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
+    td { padding: 0.6rem 1rem; border-top: 1px solid #21262d; font-size: 0.85rem; }
+    tr:hover { background: #1f2335; }
+
+    .controls { display: flex; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+    .btn { padding: 0.5rem 1.2rem; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: opacity 0.2s; }
+    .btn:hover { opacity: 0.85; }
+    .btn-kill { background: #da3633; color: #fff; }
+    .btn-pause { background: #f0883e; color: #fff; }
+    .btn-resume { background: #238636; color: #fff; }
+    .btn-close { background: #6e7681; color: #fff; padding: 0.3rem 0.7rem; font-size: 0.75rem; }
+
+    .filter-group { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .filter-btn { padding: 0.3rem 0.8rem; border: 1px solid #30363d; border-radius: 20px; background: transparent; color: #8b949e; cursor: pointer; font-size: 0.75rem; }
+    .filter-btn.active { background: #58a6ff22; color: #58a6ff; border-color: #58a6ff; }
+
+    .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 10px; font-size: 0.7rem; font-weight: 600; }
+    .badge-long { background: #3fb95033; color: #3fb950; }
+    .badge-short { background: #f8514933; color: #f85149; }
+
+    .stats-detail { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+    .stat-item { background: #1c1f2e; border-radius: 8px; padding: 0.8rem 1rem; }
+    .stat-item .si-label { font-size: 0.7rem; color: #8b949e; }
+    .stat-item .si-value { font-size: 1.1rem; font-weight: 600; margin-top: 0.2rem; }
+
+    .paused-banner { background: #f0883e33; color: #f0883e; text-align: center; padding: 0.5rem; border-radius: 6px; margin-bottom: 1rem; font-weight: 600; display: none; }
+
+    @media (max-width: 768px) {
+      .dashboard { padding: 0.5rem 1rem; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<div class="login" id="loginScreen">
+  <div class="login-box">
+    <h2>Quick TP1</h2>
+    <p style="color:#8b949e;margin-bottom:1rem;font-size:0.85rem">Trading Dashboard</p>
+    <input type="password" id="passwordInput" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')doLogin()">
+    <br>
+    <button onclick="doLogin()">Entrer</button>
+  </div>
+</div>
+
+<div class="dashboard" id="dashboard">
+  <header>
+    <h1>Quick TP1 Bot</h1>
+    <span class="mode-badge" id="modeBadge">TESTNET</span>
+  </header>
+
+  <div class="paused-banner" id="pausedBanner">BOT EN PAUSE - Aucune nouvelle position ne sera ouverte</div>
+
+  <!-- Stats overview -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="label">Balance</div>
+      <div class="value neutral" id="stBalance">--</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">P&L Jour</div>
+      <div class="value" id="stDayPnl">--</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">P&L Total</div>
+      <div class="value" id="stTotalPnl">--</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Trades Jour</div>
+      <div class="value neutral" id="stDayTrades">--</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Win Rate</div>
+      <div class="value neutral" id="stWinRate">--</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Positions</div>
+      <div class="value neutral" id="stOpenPos">--</div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="btn btn-kill" onclick="killSwitch()">Kill Switch</button>
+    <button class="btn btn-pause" id="btnPause" onclick="pauseBot()">Pause</button>
+    <button class="btn btn-resume" id="btnResume" onclick="resumeBot()" style="display:none">Reprendre</button>
+  </div>
+
+  <!-- Open positions -->
+  <div class="section">
+    <div class="section-title">Positions ouvertes</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Pair</th>
+          <th>Direction</th>
+          <th>Entrée</th>
+          <th>Prix actuel</th>
+          <th>P&L</th>
+          <th>Meilleur prix</th>
+          <th>Distance TP1</th>
+          <th>Durée</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="positionsBody"></tbody>
+    </table>
+    <p id="noPositions" style="color:#8b949e;text-align:center;padding:1rem;display:none">Aucune position ouverte</p>
+  </div>
+
+  <!-- Trade history -->
+  <div class="section">
+    <div class="section-title">Historique des trades</div>
+    <div class="filter-group">
+      <button class="filter-btn active" data-period="all" onclick="setFilter(this)">Tout</button>
+      <button class="filter-btn" data-period="today" onclick="setFilter(this)">Aujourd'hui</button>
+      <button class="filter-btn" data-period="7d" onclick="setFilter(this)">7 jours</button>
+      <button class="filter-btn" data-period="30d" onclick="setFilter(this)">30 jours</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Pair</th>
+          <th>Direction</th>
+          <th>Entrée</th>
+          <th>Sortie</th>
+          <th>P&L</th>
+          <th>Raison</th>
+          <th>Durée</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody id="tradesBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Statistics -->
+  <div class="section">
+    <div class="section-title">Statistiques</div>
+    <div class="stats-detail" id="statsDetail"></div>
+  </div>
+</div>
+
+<script>
+let password = '';
+let currentFilter = 'all';
+
+function doLogin() {
+  password = document.getElementById('passwordInput').value;
+  fetch('/api/status?password=' + encodeURIComponent(password))
+    .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+    .then(() => {
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+      refresh();
+      setInterval(refresh, 5000);
+    })
+    .catch(() => alert('Mot de passe incorrect'));
+}
+
+function api(endpoint, opts = {}) {
+  const sep = endpoint.includes('?') ? '&' : '?';
+  return fetch(endpoint + sep + 'password=' + encodeURIComponent(password), {
+    headers: { 'X-Password': password },
+    ...opts,
+  }).then(r => r.json());
+}
+
+async function refresh() {
+  try {
+    const [status, positions, trades, stats] = await Promise.all([
+      api('/api/status'),
+      api('/api/positions'),
+      api('/api/trades?period=' + currentFilter),
+      api('/api/stats'),
+    ]);
+    renderStatus(status);
+    renderPositions(positions);
+    renderTrades(trades);
+    renderStats(stats);
+  } catch (e) { console.error(e); }
+}
+
+function renderStatus(s) {
+  document.getElementById('stBalance').textContent = fmt(s.balance) + '$';
+  setPnl('stDayPnl', s.todayPnl, fmt(s.todayPnl) + '$ (' + s.todayPnlPercent.toFixed(1) + '%)');
+  setPnl('stTotalPnl', s.totalPnl, fmt(s.totalPnl) + '$');
+  document.getElementById('stDayTrades').textContent = s.todayTrades;
+  document.getElementById('stWinRate').textContent = s.winRate + '%';
+  document.getElementById('stOpenPos').textContent = s.openPositions;
+
+  const badge = document.getElementById('modeBadge');
+  badge.textContent = s.mode;
+  badge.className = 'mode-badge ' + (s.mode === 'LIVE' ? 'mode-live' : 'mode-testnet');
+
+  const pb = document.getElementById('pausedBanner');
+  pb.style.display = s.paused ? 'block' : 'none';
+  document.getElementById('btnPause').style.display = s.paused ? 'none' : '';
+  document.getElementById('btnResume').style.display = s.paused ? '' : 'none';
+}
+
+function renderPositions(positions) {
+  const body = document.getElementById('positionsBody');
+  const noPos = document.getElementById('noPositions');
+  if (!positions.length) {
+    body.innerHTML = '';
+    noPos.style.display = 'block';
+    return;
+  }
+  noPos.style.display = 'none';
+  body.innerHTML = positions.map(p => `<tr>
+    <td><b>${p.pair}</b></td>
+    <td><span class="badge ${p.direction === 'LONG' ? 'badge-long' : 'badge-short'}">${p.direction} x${p.leverage}</span></td>
+    <td>${fmtPrice(p.entryPrice)}</td>
+    <td>${fmtPrice(p.currentPrice)}</td>
+    <td class="${p.pnlUsdt >= 0 ? 'positive' : 'negative'}">${p.pnlUsdt >= 0 ? '+' : ''}${fmt(p.pnlUsdt)}$ (${p.pnlPercent >= 0 ? '+' : ''}${p.pnlPercent.toFixed(2)}%)</td>
+    <td>${fmtPrice(p.bestPrice)}</td>
+    <td>${p.distanceToTp1}%</td>
+    <td>${fmtDuration(p.ageMs)}</td>
+    <td><button class="btn btn-close" onclick="closeTrade(${p.id})">Fermer</button></td>
+  </tr>`).join('');
+}
+
+function renderTrades(trades) {
+  const body = document.getElementById('tradesBody');
+  body.innerHTML = trades.map(t => {
+    const pnlClass = t.pnl_usdt > 0 ? 'positive' : t.pnl_usdt < 0 ? 'negative' : '';
+    const reason = { tp1_hit: 'TP1', trailing_stopped: 'Trailing', sl_hit: 'SL', manual_close: 'Manuel', expired: 'Expiré' }[t.exit_reason] || t.exit_reason || '-';
+    const duration = t.closed_at && t.opened_at ? fmtDuration(new Date(t.closed_at + 'Z') - new Date(t.opened_at + 'Z')) : '-';
+    return `<tr>
+      <td><b>${t.pair}</b></td>
+      <td><span class="badge ${t.direction === 'LONG' ? 'badge-long' : 'badge-short'}">${t.direction}</span></td>
+      <td>${fmtPrice(t.entry_price)}</td>
+      <td>${t.exit_price ? fmtPrice(t.exit_price) : '-'}</td>
+      <td class="${pnlClass}">${t.pnl_usdt != null ? (t.pnl_usdt >= 0 ? '+' : '') + fmt(t.pnl_usdt) + '$' : '-'}</td>
+      <td>${reason}</td>
+      <td>${duration}</td>
+      <td style="color:#8b949e">${t.opened_at ? t.opened_at.replace('T',' ').slice(0,16) : ''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderStats(s) {
+  const el = document.getElementById('statsDetail');
+  const items = [
+    ['Win Rate', s.winRate + '%'],
+    ['Profit moyen', '+' + fmt(s.avgWin) + '$'],
+    ['Perte moyenne', fmt(s.avgLoss) + '$'],
+    ['Ratio gain/perte', s.gainLossRatio + 'x'],
+    ['Meilleur trade', '+' + fmt(s.bestTrade) + '$'],
+    ['Pire trade', fmt(s.worstTrade) + '$'],
+    ['Temps moyen TP1', s.avgTp1TimeSeconds ? fmtDuration(s.avgTp1TimeSeconds * 1000) : '-'],
+    ['TP1 atteints', s.tp1Hits],
+    ['Trailing stops', s.trailingStops],
+    ['Stop losses', s.slHits],
+  ];
+  el.innerHTML = items.map(([label, value]) => `<div class="stat-item"><div class="si-label">${label}</div><div class="si-value">${value}</div></div>`).join('');
+}
+
+function setFilter(btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentFilter = btn.dataset.period;
+  refresh();
+}
+
+async function killSwitch() {
+  if (!confirm('KILL SWITCH: Fermer TOUTES les positions et mettre en pause ?')) return;
+  await api('/api/kill', { method: 'POST' });
+  refresh();
+}
+async function pauseBot() { await api('/api/pause', { method: 'POST' }); refresh(); }
+async function resumeBot() { await api('/api/resume', { method: 'POST' }); refresh(); }
+async function closeTrade(id) {
+  if (!confirm('Fermer cette position ?')) return;
+  await api('/api/close/' + id, { method: 'POST' });
+  refresh();
+}
+
+function fmt(n) {
+  if (n == null) return '0.00';
+  return parseFloat(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtPrice(n) {
+  if (n == null) return '-';
+  n = parseFloat(n);
+  if (Math.abs(n) >= 1) return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  return n.toPrecision(4);
+}
+function fmtDuration(ms) {
+  const m = Math.floor(ms / 60000);
+  if (m < 60) return m + 'min';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h' + (m % 60) + 'min';
+  return Math.floor(h / 24) + 'j ' + (h % 24) + 'h';
+}
+</script>
+</body>
+</html>

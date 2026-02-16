@@ -1,0 +1,22 @@
+{
+  "name": "quick-tp1-bot",
+  "version": "1.0.0",
+  "description": "Quick TP1 Trading Bot - Capture first target profit on crypto signals",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0",
+    "input": "^1.0.1",
+    "telegram": "^2.26.0",
+    "winston": "^3.17.0",
+    "winston-daily-rotate-file": "^5.0.0"
+  }
+}
