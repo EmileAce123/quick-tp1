@@ -169,7 +169,7 @@ class QuickTP1Bot {
       // Save trade to DB
       const tradeId = this.db.insertTrade({
         signalId,
-        pair: tradeResult.symbol,
+        pair: tradeResult.pair,
         direction: tradeResult.direction,
         leverage: tradeResult.leverage,
         entryPrice: tradeResult.entryPrice,
@@ -182,7 +182,7 @@ class QuickTP1Bot {
 
       this.db.updateSignalStatus(signalId, 'traded');
 
-      logger.info(`Trade opened: #${tradeId} ${tradeResult.symbol} ${tradeResult.direction} @ ${tradeResult.entryPrice}`);
+      logger.info(`Trade opened: #${tradeId} ${tradeResult.pair} ${tradeResult.direction} @ ${tradeResult.entryPrice}`);
 
       // Send notification
       await this.notifier.sendTradeOpen(tradeResult);

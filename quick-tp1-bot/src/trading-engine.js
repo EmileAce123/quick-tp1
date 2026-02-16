@@ -43,6 +43,9 @@ class TradingEngine {
       headers['Content-Type'] = 'application/x-www-form-urlencoded';
     }
 
+    // Error codes that should not be retried (already-configured states)
+    const noRetryCodes = [-4046, -4028];
+
     const maxRetries = 2;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
@@ -50,10 +53,16 @@ class TradingEngine {
         const data = await resp.json();
 
         if (data.code && data.code < 0) {
-          throw new Error(`Binance API error ${data.code}: ${data.msg}`);
+          const err = new Error(`Binance API error ${data.code}: ${data.msg}`);
+          err.binanceCode = data.code;
+          throw err;
         }
         return data;
       } catch (err) {
+        // Don't retry on known harmless "already set" errors
+        if (noRetryCodes.includes(err.binanceCode)) {
+          throw err;
+        }
         if (attempt < maxRetries) {
           logger.warn(`Binance API retry ${attempt + 1}/${maxRetries}: ${err.message}`);
           await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
@@ -95,9 +104,18 @@ class TradingEngine {
       return this.symbolInfoCache.get(symbol);
     }
 
-    const data = await this._request('GET', '/fapi/v1/exchangeInfo');
-    const sym = data.symbols.find(s => s.symbol === symbol);
-    if (!sym) throw new Error(`Symbol ${symbol} not found on Binance Futures`);
+    let data;
+    try {
+      data = await this._request('GET', '/fapi/v1/exchangeInfo');
+    } catch (err) {
+      logger.error(`Failed to fetch exchangeInfo: ${err.message}`);
+      return null;
+    }
+    const sym = data.symbols ? data.symbols.find(s => s.symbol === symbol) : null;
+    if (!sym) {
+      logger.warn(`Symbol ${symbol} not found on Binance Futures (may not be available on ${config.binance.mode})`);
+      return null;
+    }
 
     const priceFilter = sym.filters.find(f => f.filterType === 'PRICE_FILTER');
     const lotFilter = sym.filters.find(f => f.filterType === 'LOT_SIZE');
@@ -131,7 +149,8 @@ class TradingEngine {
       await this._request('POST', '/fapi/v1/leverage', { symbol, leverage }, true);
       logger.info(`Leverage set to ${leverage}x for ${symbol}`);
     } catch (err) {
-      // Leverage might already be set, continue
+      // -4028: No need to change leverage — already set, silently continue
+      if (err.binanceCode === -4028) return;
       logger.warn(`Could not set leverage for ${symbol}: ${err.message}`);
     }
   }
@@ -140,10 +159,9 @@ class TradingEngine {
     try {
       await this._request('POST', '/fapi/v1/marginType', { symbol, marginType }, true);
     } catch (err) {
-      // Already set, ignore
-      if (!err.message.includes('-4046')) {
-        logger.warn(`Could not set margin type for ${symbol}: ${err.message}`);
-      }
+      // -4046: No need to change margin type — already set, silently continue
+      if (err.binanceCode === -4046) return;
+      logger.warn(`Could not set margin type for ${symbol}: ${err.message}`);
     }
   }
 
@@ -253,13 +271,22 @@ class TradingEngine {
       // 1. Get symbol info for precision
       const symbolInfo = await this.getSymbolInfo(symbol);
 
+      if (!symbolInfo) {
+        logger.warn(`Skipping trade for ${symbol}: pair not available on ${config.binance.mode}`);
+        return null;
+      }
+
+      // Validate symbolInfo fields
+      if (!symbolInfo.stepSize || !symbolInfo.quantityPrecision == null) {
+        logger.warn(`Skipping trade for ${symbol}: incomplete symbol info`, symbolInfo);
+        return null;
+      }
+
       // 2. Get current price
       const currentPrice = await this.getCurrentPrice(symbol);
 
       // 3. Check if price is within or close to entry zone (1% tolerance)
       const tolerance = config.strategy.entryTolerancePercent / 100;
-      const entryMid = (signal.entryMin + signal.entryMax) / 2;
-      const entryRange = signal.entryMax - signal.entryMin;
       const expandedMin = signal.entryMin * (1 - tolerance);
       const expandedMax = signal.entryMax * (1 + tolerance);
 
@@ -277,9 +304,17 @@ class TradingEngine {
         return null;
       }
 
-      // 5. Calculate quantity
+      // 5. Calculate quantity with debug logging
       const rawQty = positionSizeUsdt / currentPrice;
       const quantity = this.roundQuantity(rawQty, symbolInfo);
+
+      logger.debug(`Quantity calc for ${symbol}: positionSizeUSDT=${positionSizeUsdt.toFixed(4)}, currentPrice=${currentPrice}, rawQty=${rawQty}, roundedQty=${quantity}, stepSize=${symbolInfo.stepSize}, qtyPrecision=${symbolInfo.quantityPrecision}, minQty=${symbolInfo.minQty}`);
+
+      // Guard against NaN or zero quantity
+      if (!quantity || isNaN(quantity) || quantity <= 0) {
+        logger.error(`Invalid quantity for ${symbol}: ${quantity} (raw=${rawQty}, price=${currentPrice}, size=${positionSizeUsdt}, stepSize=${symbolInfo.stepSize})`);
+        return null;
+      }
 
       if (quantity < symbolInfo.minQty) {
         logger.warn(`Quantity ${quantity} below min ${symbolInfo.minQty} for ${symbol}`);
@@ -325,7 +360,7 @@ class TradingEngine {
       const reactionTime = Date.now() - startTime;
 
       return {
-        symbol,
+        pair: symbol,
         direction: signal.direction,
         leverage: signal.leverage,
         entryPrice: avgEntryPrice,
