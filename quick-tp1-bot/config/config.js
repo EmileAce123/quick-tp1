@@ -2,19 +2,14 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 // Fallback: also try loading from config/.env
-if (!process.env.TELEGRAM_API_ID) {
+if (!process.env.BINANCE_API_KEY) {
   require('dotenv').config({ path: path.join(__dirname, '.env') });
 }
 
 const config = {
-  telegram: {
-    apiId: parseInt(process.env.TELEGRAM_API_ID, 10),
-    apiHash: process.env.TELEGRAM_API_HASH || '',
-    sessionName: process.env.TELEGRAM_SESSION_NAME || 'quick_tp1_session',
-    groups: [
-      process.env.TELEGRAM_GROUP_1 || 'CryptoMau BTC Scalp Signals',
-      process.env.TELEGRAM_GROUP_2 || 'CryptoMau VIP Binance Trading Signals',
-    ],
+  // Bot 1 database — signals are read from here instead of connecting to Telegram
+  bot1: {
+    dbPath: process.env.BOT1_DB_PATH || '/root/Test-Claude-code/crypto-signals-tracker/database/signals.db',
   },
 
   notifications: {

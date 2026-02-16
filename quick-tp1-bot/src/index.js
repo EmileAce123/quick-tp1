@@ -1,8 +1,7 @@
 const config = require('../config/config');
 const logger = require('./logger');
 const DB = require('./database');
-const SignalParser = require('./signal-parser');
-const TelegramListener = require('./telegram-client');
+const SignalWatcher = require('./telegram-client');
 const TradingEngine = require('./trading-engine');
 const PositionManager = require('./position-manager');
 const Notifier = require('./notifier');
@@ -15,8 +14,7 @@ class QuickTP1Bot {
     this.notifier = null;
     this.positionManager = null;
     this.dashboard = null;
-    this.telegramListener = null;
-    this.signalParser = null;
+    this.signalWatcher = null;
   }
 
   async start() {
@@ -63,18 +61,15 @@ class QuickTP1Bot {
       this.dashboard = new DashboardServer(this.db, this.tradingEngine, this.positionManager);
       this.dashboard.start();
 
-      // 7. Initialize signal parser
-      this.signalParser = new SignalParser(this.db);
-
-      // 8. Initialize Telegram listener
-      this.telegramListener = new TelegramListener(this.signalParser, (signal) => this._onSignal(signal));
+      // 7. Initialize signal watcher (reads from bot 1's database)
+      this.signalWatcher = new SignalWatcher((signal) => this._onSignal(signal));
 
       try {
-        await this.telegramListener.start();
-        logger.info('Telegram listener started');
+        this.signalWatcher.start();
+        logger.info('Signal watcher started (reading from bot 1 DB)');
       } catch (err) {
-        logger.error(`Telegram connection failed: ${err.message}`);
-        logger.warn('Bot will run without Telegram - configure credentials in .env');
+        logger.error(`Signal watcher failed: ${err.message}`);
+        logger.warn('Bot will run without signal watcher - check BOT1_DB_PATH in .env');
       }
 
       // 9. Schedule daily report
@@ -196,7 +191,7 @@ class QuickTP1Bot {
     logger.info('Shutting down Quick TP1 Bot...');
 
     if (this.positionManager) this.positionManager.stop();
-    if (this.telegramListener) await this.telegramListener.stop();
+    if (this.signalWatcher) this.signalWatcher.stop();
     if (this.db) this.db.close();
 
     await this.notifier?.sendAlert('🔴 <b>QUICK-TP1 Bot arrêté</b>');
